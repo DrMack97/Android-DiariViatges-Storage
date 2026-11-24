@@ -56,6 +56,8 @@ dependencies {
     // Serialització JSON (històric a filesDir i pas de dades)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)
+    // Permet provar el ViewModel (viewModelScope) en tests JVM substituint Dispatchers.Main
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

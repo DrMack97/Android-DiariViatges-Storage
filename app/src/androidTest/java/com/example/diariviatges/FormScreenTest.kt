@@ -13,6 +13,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.test.platform.app.InstrumentationRegistry
+import com.example.diariviatges.data.RouteRepository
 import com.example.diariviatges.model.Difficulty
 import com.example.diariviatges.ui.screens.FormScreen
 import com.example.diariviatges.viewmodel.TravelDiaryViewModel
@@ -24,7 +26,9 @@ import org.junit.Test
 /** Test d'interfície del formulari: components, validació visual i botó. */
 class FormScreenTest {
     @get:Rule val rule = createComposeRule()
-    private val vm = TravelDiaryViewModel()
+    private val vm = TravelDiaryViewModel(
+        RouteRepository(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+    )
 
     @Before
     fun setUp() {

@@ -1,6 +1,11 @@
 package com.example.diariviatges.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.diariviatges.data.RouteRepository
 import com.example.diariviatges.model.Difficulty
 import com.example.diariviatges.model.RouteEntry
 import com.example.diariviatges.model.RouteValidator
@@ -9,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,14 +27,27 @@ import java.util.Locale
  * - Cada canvi es fa amb _uiState.update { it.copy(...) }: es crea un estat
  *   NOU a partir de l'anterior (immutabilitat), mai es modifica el vell.
  * - Sobreviu als canvis de configuració (girar la pantalla) i no es perden les dades.
+ *
+ * Rep el repositori pel constructor (injecció de dependències): el ViewModel no
+ * sap COM es guarden les dades, només demana "carrega" i "desa".
  */
-class TravelDiaryViewModel : ViewModel() {
+class TravelDiaryViewModel(
+    private val repository: RouteRepository
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         // Per defecte proposem la data d'avui
         TravelDiaryUiState(date = formatDate(System.currentTimeMillis()))
     )
     val uiState: StateFlow<TravelDiaryUiState> = _uiState.asStateFlow()
+
+    init {
+        // En obrir l'app: llegim l'històric de filesDir i el posem a l'estat
+        viewModelScope.launch {
+            val saved = repository.loadRoutes()
+            _uiState.update { it.copy(history = saved) }
+        }
+    }
 
     // ---------- Esdeveniments del formulari (validació en temps real) ----------
 
@@ -86,6 +105,27 @@ class TravelDiaryViewModel : ViewModel() {
         )
     }
 
+    /**
+     * Acció del botó "Generar Postal / Crònica":
+     * valida, crea la ruta i la DESA automàticament a l'històric (filesDir).
+     * Retorna la ruta creada (per navegar a la postal) o null si hi ha errors.
+     */
+    fun generateChronicle(): RouteEntry? {
+        val route = buildRoute() ?: return null
+        // Llista nova (immutable) amb la ruta al principi: la més recent primer
+        val newHistory = listOf(route) + _uiState.value.history
+        _uiState.update { it.copy(history = newHistory) }
+        viewModelScope.launch { repository.saveRoutes(newHistory) }
+        return route
+    }
+
+    /** Esborra una ruta de l'històric i torna a desar el fitxer. */
+    fun deleteRoute(route: RouteEntry) {
+        val newHistory = _uiState.value.history.filterNot { it.id == route.id }
+        _uiState.update { it.copy(history = newHistory) }
+        viewModelScope.launch { repository.saveRoutes(newHistory) }
+    }
+
     /** Buida el formulari (mantenint l'històric) per introduir una ruta nova. */
     fun resetForm() = _uiState.update {
         TravelDiaryUiState(date = formatDate(System.currentTimeMillis()), history = it.history)
@@ -95,6 +135,17 @@ class TravelDiaryViewModel : ViewModel() {
     fun messageShown() = _uiState.update { it.copy(userMessage = null) }
 
     companion object {
+        /**
+         * Factory: explica a Android COM crear aquest ViewModel, ja que té un
+         * paràmetre al constructor. Agafem l'Application per obtenir filesDir.
+         */
+        val Factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY])
+                TravelDiaryViewModel(RouteRepository(app.filesDir))
+            }
+        }
+
         /**
          * El DatePicker de Material 3 retorna la data en mil·lisegons UTC,
          * per això formatem en zona UTC (si no, podria sortir el dia anterior).

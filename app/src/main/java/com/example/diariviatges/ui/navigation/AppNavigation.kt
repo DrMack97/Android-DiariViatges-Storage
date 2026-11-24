@@ -10,6 +10,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.diariviatges.model.RouteEntry
 import com.example.diariviatges.ui.screens.FormScreen
+import com.example.diariviatges.ui.screens.HistoryScreen
 import com.example.diariviatges.ui.screens.PostalScreen
 import com.example.diariviatges.viewmodel.TravelDiaryViewModel
 import kotlinx.serialization.Serializable
@@ -21,6 +22,7 @@ import kotlinx.serialization.json.Json
  * en una ruta i, si té paràmetres, els passa com a arguments de navegació.
  */
 @Serializable object FormDestination
+@Serializable object HistoryDestination
 
 /**
  * La postal rep la ruta com a TEXT JSON (serialitzat amb kotlinx.serialization).
@@ -35,7 +37,7 @@ import kotlinx.serialization.json.Json
  * així el formulari conserva les dades quan tornem enrere.
  */
 @Composable
-fun AppNavigation(vm: TravelDiaryViewModel = viewModel()) {
+fun AppNavigation(vm: TravelDiaryViewModel = viewModel(factory = TravelDiaryViewModel.Factory)) {
     val navController = rememberNavController()
     val uiState by vm.uiState.collectAsStateWithLifecycle()
 
@@ -52,12 +54,12 @@ fun AppNavigation(vm: TravelDiaryViewModel = viewModel()) {
                 onSoloChange = vm::onSoloChange,
                 onNotesChange = vm::onNotesChange,
                 onGenerateClick = {
-                    // 1) El ViewModel valida i crea el RouteEntry
-                    val route = vm.buildRoute() ?: return@FormScreen
+                    // 1) El ViewModel valida, crea el RouteEntry i el desa a filesDir
+                    val route = vm.generateChronicle() ?: return@FormScreen
                     // 2) Serialitzem a JSON i naveguem passant-lo com a argument
                     navController.navigate(PostalDestination(Json.encodeToString(route)))
                 },
-                onHistoryClick = { /* R5: pantalla d'històric */ }
+                onHistoryClick = { navController.navigate(HistoryDestination) }
             )
         }
 
@@ -68,6 +70,18 @@ fun AppNavigation(vm: TravelDiaryViewModel = viewModel()) {
             val route = Json.decodeFromString<RouteEntry>(args.routeJson)
             PostalScreen(
                 route = route,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable<HistoryDestination> {
+            HistoryScreen(
+                history = uiState.history,
+                // Reutilitzem la mateixa pantalla de postal passant la ruta en JSON
+                onRouteClick = { route ->
+                    navController.navigate(PostalDestination(Json.encodeToString(route)))
+                },
+                onDeleteClick = vm::deleteRoute,
                 onBack = { navController.popBackStack() }
             )
         }
